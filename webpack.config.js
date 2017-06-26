@@ -216,6 +216,7 @@ client:
                   module.hot.accept();//用于js的无刷新更新
                   module.hot.dispose(function() {
                     //更新前处理回调
+                    //比如说有定时器清除掉时使用
                   });
                 }
 server:
