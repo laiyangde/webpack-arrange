@@ -3,11 +3,15 @@ var webpack = require('webpack');
 var HtmlWebpackPlugin = require('html-webpack-plugin');
 var ExtractTextPlugin = require("extract-text-webpack-plugin");
 
+//客户端怎样连接中间件
+//你可以使用像'webpack-hot-middleware/client?path=http://localhost:3000/__webpack_hmr'这样的完整路径，
+//这在你使用第三方服务如django、php时时非常有用的
+var hotMiddlewareScript = 'webpack-hot-middleware/client?path=/__webpack_hmr&timeout=20000&reload=true';
 module.exports = {
     context: path.resolve(__dirname, 'app'), //从这里寻找入口js
     entry: { //脚本文件入口
-        // 'vendor': ['./m1.js'],
-        page1: ['./index.js','webpack-hot-middleware/client'],//webpack-hot-middleware/client连接到服务器，以便打包或者重新编译时收到通知
+        entry1: ['./js/entry1.js',hotMiddlewareScript],//webpack-hot-middleware/client连接到服务器，以便打包或者重新编译时收到通知
+        entry2: ['./js/entry2.js',hotMiddlewareScript]
     },
     output: { //脚本文件出口
         filename: '[name].bundle.js', //出口文件名
@@ -15,7 +19,7 @@ module.exports = {
         chunkFilename: "[id].js", //非入口js名   require.ensure异步加载时才会用到
         publicPath: '' // 设置为想要的资源访问路径,如果没有设置，则默认从站点根目录加载。
     },
-    watch: true,
+    // watch: true,
     resolve: { //http://www.css88.com/doc/webpack2/configuration/resolve/
         alias: { //创建 import 或 require 的别名，来确保模块引入变得更简单
             app: path.resolve(__dirname, 'app') //import add from 'app/m1';
@@ -65,13 +69,13 @@ module.exports = {
     },
     plugins: [
         new webpack.optimize.CommonsChunkPlugin({
-            names: ['vendor', 'manifest'],
+            names: ['vendor'],
             // minchunks:2//模块调用超过2次时webpack才会把它当做一个公共模块抽取出来
         }),
         new HtmlWebpackPlugin({
             title: '标题',
             filename: 'index.html', //生成的html存放路径，相对于 path
-            template: './template/index.tpl.html', //模板可以html jade handlebars 有的要配合相应的加载器，比如html要html-loader
+            template: './index.tpl.html', //模板可以html jade handlebars 有的要配合相应的加载器，比如html要html-loader
             inject: true, //  true | 'head' | 'body' | false  脚本资源注入到body（body or true）底部还是head（head）里，还是不注入（false）
             // favicon:'./src/img/favicon.ico', //favicon路径
             minify: { //压缩HTML文件,其它属性看https://github.com/kangax/html-minifier#options-quick-reference
@@ -94,8 +98,8 @@ module.exports = {
             disable: false, //是否禁用插件                            
             ignoreOrder: false //是否禁用顺序检查，对 CSS Modules 有用!
         }),
-        new webpack.HotModuleReplacementPlugin(),//// 开启全局的模块热替换(HMR)
-        new webpack.NoErrorsPlugin()//跳过编译时出错的代码并记录，使编译后运行时的包不会发生错误。
+        new webpack.HotModuleReplacementPlugin(),// 开启全局的模块热替换(HMR)
+        new webpack.NoEmitOnErrorsPlugin()//在编译出现错误时，使用 NoEmitOnErrorsPlugin 来跳过输出阶段。这样可以确保输出资源不会包含错误
     ]
 };
 
@@ -185,12 +189,54 @@ CommonsChunkPlugin
 =================
 
 
-
 =================
-BundleAnalyzerPlugin 
-能够将webpack包的内容转换成可缩放的树状图，方便进行交互分析
+webpack-dev-middleware
+与
+webpack-hot-middleware  
+实现浏览器的无刷新更新
 =================
-参考http://www.tuicool.com/articles/jiMniee
 
-var BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+webpack-dev-middleware
+是一个处理静态资源的中间件，此静态资源保存在内存中，不写入硬盘，正常情况下express访问静态文件需要app.use(express.static('dist'))
+webpack-hot-middleware
+建立websoket服务，当有文件更新时以便客户端处理。
+
+client:
+    1.在plugins里添加
+    plugins: [
+        new webpack.HotModuleReplacementPlugin(),// 开启全局的模块热替换(HMR)
+        new webpack.NoEmitOnErrorsPlugin()//在编译出现错误时，使用 NoEmitOnErrorsPlugin 来跳过输出阶段。这样可以确保输出资源不会包含错误
+    ]
+    2.在entry每个入口添加：'webpack-hot-middleware/client?path=/__webpack_hmr&timeout=2000&overlay=false&reload=true'
+        path：中间件为事件流服务的路径，个人理解websoket服务url
+        timeout：失去连接后等待多久后重连
+        overlay： Set to false to disable the DOM-based client-side overlay. 设置为false禁用基于dom的客户端覆盖
+        reload：webpack“卡住”时是否自动刷新页面，比如更新js时（默认只更新css），如果更改js需要热更新，请在入口文件中添加以下代码
+                if (module.hot) {
+                  module.hot.accept();//用于js的无刷新更新
+                  module.hot.dispose(function() {
+                    //更新前处理回调
+                  });
+                }
+server:
+    1. 添加webpack-dev-middleware
+        var express = require('express');
+        var webpack = require('webpack');
+        var webpackConfig = require('./webpack.config');
+        var compiler = webpack(webpackConfig);
+        app.use(require("webpack-dev-middleware")(compiler, {
+            noInfo: true, publicPath: webpackConfig.output.publicPath
+        }));
+    2.添加附带相同示例compiler的webpack-hot-middleware
+        app.use(require("webpack-hot-middleware")(compiler));
+    3.监听端口
+        const server = app.listen(8080, function () {
+          const host = server.address().address
+          const port = server.address().port
+          console.log("应用实例，访问地址为 http://%s:%s", host, port)
+        })
+
+详细查看server.js
+
+
 **************************************************************************************************/
